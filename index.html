@@ -1185,12 +1185,19 @@
             updatePassengerStatusBoxGlobal(anyDriverOnline);
         });
 
+        // REAL-TIME LISTENER UTAMA (Diperbarui agar langsung sinkron otomatis tanpa refresh)
         db.collection("iqbike_system").doc("active_order").onSnapshot((doc) => {
             if (doc.exists) {
                 const cloudOrder = doc.data();
                 
                 if (cloudOrder.deviceUuid && cloudOrder.deviceUuid !== passengerDeviceUuid && cloudOrder.status === 'WAITING') {
                     return;
+                }
+
+                const localOrder = JSON.parse(localStorage.getItem('tatanggaq_active_order'));
+
+                if (localOrder && localOrder.status === 'WAITING' && cloudOrder.status !== 'WAITING') {
+                    playNotificationSoundAndVibe();
                 }
 
                 if (cloudOrder.status === 'COMPLETED') {
@@ -1223,6 +1230,8 @@
                 resetAddressAndFare();
             }
             updatePassengerAppUI();
+        }, (error) => {
+            console.error("Firestore Listener Error:", error);
         });
     }
 
