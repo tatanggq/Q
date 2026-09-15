@@ -1185,7 +1185,6 @@
             updatePassengerStatusBoxGlobal(anyDriverOnline);
         });
 
-        // LISTENER REAL-TIME STATUS ORDER PENUMPANG YANG DIPERBAIKI SECARA TOTAL
         db.collection("iqbike_system").doc("active_order").onSnapshot((doc) => {
             if (doc.exists) {
                 const cloudOrder = doc.data();
@@ -1204,14 +1203,12 @@
                     }
                     localStorage.setItem('tatanggaq_active_order', JSON.stringify(cloudOrder));
 
-                    // REFRESH REAL-TIME DAFTAR DI MODAL DRIVER JIKA MODAL SEDANG TERBUKA
                     const driverModal = document.getElementById('driverSelectionModal');
                     if (driverModal && driverModal.style.display === 'flex') {
                         renderAvailableDriversList();
                     }
                 }
             } else {
-                // JIKA DOKUMEN DI-DELETE ATAU DI-RESET OLEH DRIVER/PENUMPANG
                 const localOrder = JSON.parse(localStorage.getItem('tatanggaq_active_order'));
                 if (localOrder && localOrder.status !== 'WAITING') {
                     playNotificationSoundAndVibe();
