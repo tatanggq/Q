@@ -1189,7 +1189,8 @@
             if (doc.exists) {
                 const cloudOrder = doc.data();
                 if (cloudOrder.deviceUuid === passengerDeviceUuid) {
-                    const currentAcceptedCount = cloudOrder.acceptedDrivers ? cloudOrder.acceptedDrivers.length : 0;
+                    let rawAccepted = cloudOrder.acceptedDrivers || [];
+                    const currentAcceptedCount = Array.isArray(rawAccepted) ? rawAccepted.length : 0;
                     if (currentAcceptedCount > lastKnownAcceptedCount) {
                         playNotificationSoundAndVibe();
                         lastKnownAcceptedCount = currentAcceptedCount;
@@ -1466,10 +1467,19 @@
 
         db.collection("iqbike_drivers").get().then((snapshot) => {
             let driversWithDistance = [];
+            
             snapshot.forEach((doc) => {
                 const dData = doc.data();
-                const matchedAccepted = order.acceptedDrivers.find(d => d.wa === doc.id);
-                if (matchedAccepted && dData.lat && dData.lng && dData.isOnline) {
+                const docId = doc.id; // Nomor WA dari document ID collection iqbike_drivers
+
+                // CEK FLEKSIBEL: Apakah docId ada di dalam acceptedDrivers (baik format string maupun object {wa: ...})
+                const isMatched = order.acceptedDrivers.some(item => {
+                    if (typeof item === 'string') return item === docId;
+                    if (item && typeof item === 'object') return (item.wa === docId || item.driverWa === docId);
+                    return false;
+                });
+
+                if (isMatched && dData.lat && dData.lng && dData.isOnline) {
                     const R = 6371e3;
                     const φ1 = dData.lat * Math.PI/180;
                     const φ2 = order.pickupLat * Math.PI/180;
@@ -1486,7 +1496,9 @@
                     }
 
                     driversWithDistance.push({
-                        wa: doc.id, distanceMeters, distanceKm,
+                        wa: docId, 
+                        distanceMeters, 
+                        distanceKm,
                         distanceText: (distanceMeters >= 1000) ? distanceKm.toFixed(1) + " km" : Math.round(distanceMeters) + " meter",
                         pickupExtraFee
                     });
@@ -1497,25 +1509,38 @@
             container.innerHTML = '';
 
             if (driversWithDistance.length === 0) {
-                container.innerHTML = '<p style="font-size: 11px; color: #a0a0a0; text-align:center; padding:12px;">Memuat posisi Driver...</p>';
-                return;
+                // Fallback jika driver ada di acceptedDrivers tapi data lat/lng di collection iqbike_drivers belum sinkron
+                order.acceptedDrivers.forEach(rawItem => {
+                    const driverWa = (typeof rawItem === 'string') ? rawItem : (rawItem.wa || rawItem.driverWa || "Driver");
+                    driversWithDistance.push({
+                        wa: driverWa,
+                        distanceMeters: 0,
+                        distanceText: "Dekat",
+                        pickupExtraFee: 0
+                    });
+                });
             }
 
-            driversWithDistance.forEach((driver) => {
-                const feeText = driver.pickupExtraFee > 0 ? ` (+Rp ${driver.pickupExtraFee.toLocaleString('id-ID')} Tambahan Jemput)` : ` (Jemput FREE)`;
-                const card = document.createElement('div');
-                card.style.cssText = "background:#2a2a2a; padding:10px; border-radius:8px; border:1px solid #444; display:flex; flex-direction:column; gap:6px;";
-                card.innerHTML = `
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <span><i class="fa-solid fa-motorcycle" style="color:var(--whatsapp-green);"></i> <strong>Driver WA:</strong> ${driver.wa}</span>
-                        <span style="background:#0288d1; color:#fff; padding:2px 6px; border-radius:6px; font-size:10px; font-weight:bold;">${driver.distanceText} ${feeText}</span>
-                    </div>
-                    <button onclick="passengerSelectDriver('${driver.wa}', ${driver.pickupExtraFee})" style="background:var(--whatsapp-green); color:#fff; border:none; padding:8px; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer;">
-                        <i class="fa-solid fa-check-circle"></i> Pilih Driver Ini
-                    </button>
-                `;
-                container.appendChild(card);
-            });
+            driversWithDriversUI(driversWithDistance, container);
+        });
+    }
+
+    function driversWithDriversUI(driversWithDistance, container) {
+        container.innerHTML = '';
+        driversWithDistance.forEach((driver) => {
+            const feeText = driver.pickupExtraFee > 0 ? ` (+Rp ${driver.pickupExtraFee.toLocaleString('id-ID')} Tambahan Jemput)` : ` (Jemput FREE)`;
+            const card = document.createElement('div');
+            card.style.cssText = "background:#2a2a2a; padding:10px; border-radius:8px; border:1px solid #444; display:flex; flex-direction:column; gap:6px;";
+            card.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span><i class="fa-solid fa-motorcycle" style="color:var(--whatsapp-green);"></i> <strong>Driver WA:</strong> ${driver.wa}</span>
+                    <span style="background:#0288d1; color:#fff; padding:2px 6px; border-radius:6px; font-size:10px; font-weight:bold;">${driver.distanceText} ${feeText}</span>
+                </div>
+                <button onclick="passengerSelectDriver('${driver.wa}', ${driver.pickupExtraFee})" style="background:var(--whatsapp-green); color:#fff; border:none; padding:8px; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer;">
+                    <i class="fa-solid fa-check-circle"></i> Pilih Driver Ini
+                </button>
+            `;
+            container.appendChild(card);
         });
     }
 
@@ -1831,7 +1856,8 @@
         }
 
         if (order.status === 'WAITING') {
-            const countAccepted = order.acceptedDrivers ? order.acceptedDrivers.length : 0;
+            let rawAccepted = order.acceptedDrivers || [];
+            let countAccepted = Array.isArray(rawAccepted) ? rawAccepted.length : 0;
             btnSend.innerHTML = `<i class="fa-solid fa-motorcycle"></i> Lihat Pilihan Driver Terdekat (${countAccepted} Mengajukan)`;
             btnSend.style.backgroundColor = ""; 
             btnSend.style.color = "#111";
