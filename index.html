@@ -6,7 +6,7 @@
     <title>TatanggaQ - Pesan Q-Ride & Q-Rim</title>
 
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#A6CE39">
+    <meta name="theme-color" content="#B2FF00">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <!-- MapLibre GL CSS & JS (Peta Vektor Modern ala inDrive, Cepat & Gratis) -->
@@ -18,10 +18,10 @@
 
     <style>
         :root {
-            /* Tema Default / Q-Ride (Hijau Asli inDrive: #A6CE39) */
-            --primary-color: #A6CE39;
-            --primary-hover: #93bc2f;
-            --theme-glow: rgba(166, 206, 57, 0.3);
+            /* Tema Default / Q-Ride (Hijau Terang / Neon Lime inDrive) */
+            --primary-color: #B2FF00;
+            --primary-hover: #9ce000;
+            --theme-glow: rgba(178, 255, 0, 0.4);
             
             --bg-dark: #121212;
             --text-light: #ffffff;
@@ -101,7 +101,7 @@
         /* Header Atas Berubah Mengikuti Tema */
         .header {
             background-color: var(--primary-color);
-            color: var(--text-light);
+            color: #111; /* Teks gelap agar kontras tajam dengan hijau terang neon */
             padding: 10px 14px;
             display: flex;
             justify-content: space-between;
@@ -125,9 +125,9 @@
         }
 
         .btn-header-install {
-            background: rgba(0, 0, 0, 0.2);
-            color: var(--text-light);
-            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: rgba(0, 0, 0, 0.1);
+            color: #111;
+            border: 1px solid rgba(0, 0, 0, 0.2);
             padding: 5px 10px;
             border-radius: 8px;
             font-size: 11px;
@@ -163,7 +163,7 @@
 
         .btn-service.active-service {
             background: var(--primary-color) !important;
-            color: #ffffff !important;
+            color: #111 !important;
             border-color: var(--primary-hover) !important;
         }
 
@@ -417,12 +417,12 @@
             gap: 6px;
         }
 
-        /* Tombol Utama Mengikuti Tema Q-Ride / Q-Rim */
+        /* Tombol Utama Mengikuti Tema Q-Ride (Hijau Neon Terang) / Q-Rim */
         .btn-submit {
             width: 100%;
             padding: 11px;
             background-color: var(--primary-color);
-            color: white;
+            color: #111; /* Teks gelap agar mudah dibaca di atas hijau neon terang */
             border: none;
             border-radius: 10px;
             font-size: 13px;
@@ -434,6 +434,10 @@
             gap: 8px;
             flex-shrink: 0;
             box-shadow: 0 4px 10px var(--theme-glow);
+        }
+
+        body.theme-qrim .btn-submit {
+            color: #ffffff !important; /* Kembali putih jika mode Q-Rim (Biru) */
         }
 
         .btn-history-toggle {
@@ -555,7 +559,7 @@
                     <label class="form-label" style="color:#ccc;">Nomor WhatsApp Anda</label>
                     <input type="tel" id="otpPhoneInput" class="form-input" placeholder="08xxxxxxxxxx">
                 </div>
-                <button onclick="requestWaOtpCode()" class="btn-submit" style="margin-top:8px; background:var(--whatsapp-green);">
+                <button onclick="requestWaOtpCode()" class="btn-submit" style="margin-top:8px; background:var(--whatsapp-green); color:#fff;">
                     <i class="fa-solid fa-paper-plane"></i> Kirim Kode OTP via WhatsApp
                 </button>
             </div>
@@ -567,7 +571,7 @@
                 <div class="form-group">
                     <input type="text" id="otpCodeInput" class="form-input" placeholder="Masukkan 4 Digit OTP" maxlength="4" style="text-align:center; font-size:20px; letter-spacing:6px; font-weight:bold;">
                 </div>
-                <button onclick="verifyWaOtpCode()" class="btn-submit" style="background:var(--whatsapp-green); font-size:13px;">
+                <button onclick="verifyWaOtpCode()" class="btn-submit" style="background:var(--whatsapp-green); color:#fff; font-size:13px;">
                     <i class="fa-solid fa-check-circle"></i> Verifikasi & Lanjutkan
                 </button>
             </div>
@@ -851,7 +855,7 @@
         if (serviceType === 'ojek') {
             btnOjek.className = 'btn-service active-service';
             btnKurir.className = 'btn-service';
-            bodyEl.classList.remove('theme-qrim'); // Hijau Asli inDrive (#A6CE39)
+            bodyEl.classList.remove('theme-qrim'); // Hijau Neon inDrive
         } else {
             btnOjek.className = 'btn-service';
             btnKurir.className = 'btn-service active-service';
@@ -1828,6 +1832,7 @@
         if (!order || (order.deviceUuid && order.deviceUuid !== passengerDeviceUuid) || order.status === 'CANCELLED_BY_PASSENGER') {
             btnSend.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Cari & Kirim Pesanan ke Driver`;
             btnSend.style.backgroundColor = ""; 
+            btnSend.style.color = "#111";
             btnSend.disabled = false;
             btnCancel.style.display = 'none';
             btnJemput.disabled = false;
@@ -1853,6 +1858,7 @@
             const countAccepted = order.acceptedDrivers ? order.acceptedDrivers.length : 0;
             btnSend.innerHTML = `<i class="fa-solid fa-motorcycle"></i> Lihat Pilihan Driver Terdekat (${countAccepted} Mengajukan)`;
             btnSend.style.backgroundColor = ""; 
+            btnSend.style.color = "#111";
             btnCancel.style.display = 'flex';
         } else {
             nameInput.disabled = true;
@@ -1863,6 +1869,7 @@
             btnCancel.style.display = 'flex';
             btnSend.innerHTML = `<i class="fa-brands fa-whatsapp"></i> Chat Driver (${order.assignedDriverWa}) / Ubah Tujuan`;
             btnSend.style.backgroundColor = 'var(--whatsapp-green)';
+            btnSend.style.color = '#ffffff';
         }
 
         computedTotalFare = order.fare;
