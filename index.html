@@ -1185,7 +1185,7 @@
             updatePassengerStatusBoxGlobal(anyDriverOnline);
         });
 
-        // LISTENER REAL-TIME STATUS ORDER PENUMPANG YANG DIPERBAIKI
+        // LISTENER REAL-TIME STATUS ORDER PENUMPANG YANG DIPERBAIKI SECARA TOTAL
         db.collection("iqbike_system").doc("active_order").onSnapshot((doc) => {
             if (doc.exists) {
                 const cloudOrder = doc.data();
@@ -1211,6 +1211,7 @@
                     }
                 }
             } else {
+                // JIKA DOKUMEN DI-DELETE ATAU DI-RESET OLEH DRIVER/PENUMPANG
                 const localOrder = JSON.parse(localStorage.getItem('tatanggaq_active_order'));
                 if (localOrder && localOrder.status !== 'WAITING') {
                     playNotificationSoundAndVibe();
@@ -1448,6 +1449,7 @@
         if (dropoffMarker) { dropoffMarker.remove(); dropoffMarker = null; }
         confirmLocationSelection();
         calculateFare();
+        updatePassengerAppUI();
     }
 
     function handleMainActionButton() {
@@ -1489,12 +1491,17 @@
             
             snapshot.forEach((doc) => {
                 const dData = doc.data();
-                const docId = doc.id;
+                const docId = String(doc.id).trim();
 
                 const isMatched = order.acceptedDrivers.some(item => {
-                    if (typeof item === 'string') return item === docId;
-                    if (item && typeof item === 'object') return (item.wa === docId || item.driverWa === docId);
-                    return false;
+                    if (!item) return false;
+                    let itemWa = "";
+                    if (typeof item === 'string') {
+                        itemWa = item;
+                    } else if (typeof item === 'object') {
+                        itemWa = item.wa || item.driverWa || item.id || "";
+                    }
+                    return String(itemWa).trim() === docId;
                 });
 
                 if (isMatched && dData.lat && dData.lng && dData.isOnline) {
@@ -1528,7 +1535,7 @@
 
             if (driversWithDistance.length === 0) {
                 order.acceptedDrivers.forEach(rawItem => {
-                    const driverWa = (typeof rawItem === 'string') ? rawItem : (rawItem.wa || rawItem.driverWa || "Driver");
+                    const driverWa = (typeof rawItem === 'string') ? rawItem : (rawItem.wa || rawItem.driverWa || rawItem.id || "Driver");
                     driversWithDistance.push({
                         wa: driverWa,
                         distanceMeters: 0,
