@@ -9,20 +9,19 @@
     <meta name="theme-color" content="#B2FF00">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- MapLibre GL CSS & JS (Peta Vektor Modern ala inDrive, Cepat & Gratis) -->
+    <!-- MapLibre GL CSS & JS -->
     <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
     <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
 
+    <!-- Firebase Compat SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
     <style>
         :root {
-            /* Tema Default / Q-Ride (Hijau Terang / Neon Lime inDrive) */
             --primary-color: #B2FF00;
             --primary-hover: #9ce000;
             --theme-glow: rgba(178, 255, 0, 0.4);
-            
             --bg-dark: #121212;
             --text-light: #ffffff;
             --text-dark: #222222;
@@ -33,7 +32,6 @@
             --whatsapp-green: #25D366;
         }
 
-        /* Tema Khusus Q-Rim (Biru Persib) */
         body.theme-qrim {
             --primary-color: #0047AB !important;
             --primary-hover: #003380 !important;
@@ -98,10 +96,9 @@
             position: relative;
         }
 
-        /* Header Atas Berubah Mengikuti Tema */
         .header {
             background-color: var(--primary-color);
-            color: #111; /* Teks gelap agar kontras tajam dengan hijau terang neon */
+            color: #111;
             padding: 10px 14px;
             display: flex;
             justify-content: space-between;
@@ -158,7 +155,6 @@
             justify-content: center;
             gap: 6px;
             color: #333;
-            transition: all 0.2s ease;
         }
 
         .btn-service.active-service {
@@ -187,7 +183,6 @@
             justify-content: center;
             gap: 6px;
             color: #0288d1;
-            transition: all 0.2s ease;
         }
 
         .btn-pin-mode.active-mode {
@@ -207,15 +202,11 @@
             border: 1px solid var(--border-color);
         }
 
-        #map {
-            width: 100%;
-            height: 100%;
-        }
+        #map { width: 100%; height: 100%; }
 
         .center-pin-container {
             position: absolute;
-            top: 50%;
-            left: 50%;
+            top: 50%; left: 50%;
             transform: translate(-50%, -100%);
             z-index: 1000;
             pointer-events: none;
@@ -239,15 +230,11 @@
             margin-bottom: 2px;
         }
 
-        .center-pin-icon {
-            font-size: 32px;
-            filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.4));
-        }
+        .center-pin-icon { font-size: 32px; filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.4)); }
 
         .btn-confirm-location {
             position: absolute;
-            top: 10px;
-            left: 50%;
+            top: 10px; left: 50%;
             transform: translateX(-50%);
             background: #0288d1;
             color: white;
@@ -266,10 +253,8 @@
 
         .btn-my-location {
             position: absolute;
-            bottom: 16px;
-            right: 16px;
-            width: 42px;
-            height: 42px;
+            bottom: 16px; right: 16px;
+            width: 42px; height: 42px;
             background-color: #ffffff;
             color: var(--accent-blue);
             border-radius: 50%;
@@ -356,9 +341,7 @@
 
         .search-results {
             position: absolute;
-            top: 100%;
-            left: 0;
-            right: 0;
+            top: 100%; left: 0; right: 0;
             background: white;
             border: 1px solid var(--border-color);
             border-radius: 8px;
@@ -375,7 +358,6 @@
             border-bottom: 1px solid #eee;
             cursor: pointer;
         }
-
         .search-item:hover { background-color: #f4f5f7; }
 
         .fare-card {
@@ -417,12 +399,11 @@
             gap: 6px;
         }
 
-        /* Tombol Utama Mengikuti Tema Q-Ride (Hijau Neon Terang) / Q-Rim */
         .btn-submit {
             width: 100%;
             padding: 11px;
             background-color: var(--primary-color);
-            color: #111; /* Teks gelap agar mudah dibaca di atas hijau neon terang */
+            color: #111;
             border: none;
             border-radius: 10px;
             font-size: 13px;
@@ -434,10 +415,6 @@
             gap: 8px;
             flex-shrink: 0;
             box-shadow: 0 4px 10px var(--theme-glow);
-        }
-
-        body.theme-qrim .btn-submit {
-            color: #ffffff !important; /* Kembali putih jika mode Q-Rim (Biru) */
         }
 
         .btn-history-toggle {
@@ -485,7 +462,6 @@
             overflow-y: auto;
         }
 
-        /* Tombol Verifikasi WA Khas WhatsApp */
         .btn-save-wa {
             background: var(--whatsapp-green);
             color: #fff;
@@ -855,11 +831,11 @@
         if (serviceType === 'ojek') {
             btnOjek.className = 'btn-service active-service';
             btnKurir.className = 'btn-service';
-            bodyEl.classList.remove('theme-qrim'); // Hijau Neon inDrive
+            bodyEl.classList.remove('theme-qrim');
         } else {
             btnOjek.className = 'btn-service';
             btnKurir.className = 'btn-service active-service';
-            bodyEl.classList.add('theme-qrim');    // Biru Persib
+            bodyEl.classList.add('theme-qrim');
         }
         calculateFare();
     }
