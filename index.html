@@ -1185,8 +1185,10 @@
             updatePassengerStatusBoxGlobal(anyDriverOnline);
         });
 
-        // REAL-TIME LISTENER UTAMA (Diperbarui agar langsung sinkron otomatis tanpa refresh)
+        // REAL-TIME LISTENER UTAMA (Diperbarui agar sinkronisasi instan reaktif otomatis tanpa refresh)
         db.collection("iqbike_system").doc("active_order").onSnapshot((doc) => {
+            const localOrder = JSON.parse(localStorage.getItem('tatanggaq_active_order'));
+
             if (doc.exists) {
                 const cloudOrder = doc.data();
                 
@@ -1194,9 +1196,11 @@
                     return;
                 }
 
-                const localOrder = JSON.parse(localStorage.getItem('tatanggaq_active_order'));
+                let rawAccepted = cloudOrder.acceptedDrivers || [];
+                let currentAcceptedCount = Array.isArray(rawAccepted) ? rawAccepted.length : 0;
+                let prevAcceptedCount = localOrder && localOrder.acceptedDrivers ? localOrder.acceptedDrivers.length : 0;
 
-                if (localOrder && localOrder.status === 'WAITING' && cloudOrder.status !== 'WAITING') {
+                if ((localOrder && localOrder.status === 'WAITING' && cloudOrder.status !== 'WAITING') || (currentAcceptedCount > prevAcceptedCount)) {
                     playNotificationSoundAndVibe();
                 }
 
@@ -1206,13 +1210,8 @@
                     localStorage.removeItem('tatanggaq_active_order');
                     resetAddressAndFare();
                 } else {
-                    let rawAccepted = cloudOrder.acceptedDrivers || [];
-                    const currentAcceptedCount = Array.isArray(rawAccepted) ? rawAccepted.length : 0;
-                    if (currentAcceptedCount > lastKnownAcceptedCount) {
-                        playNotificationSoundAndVibe();
-                        lastKnownAcceptedCount = currentAcceptedCount;
-                    }
                     localStorage.setItem('tatanggaq_active_order', JSON.stringify(cloudOrder));
+                    lastKnownAcceptedCount = currentAcceptedCount;
 
                     const driverModal = document.getElementById('driverSelectionModal');
                     if (driverModal && driverModal.style.display === 'flex') {
@@ -1220,7 +1219,6 @@
                     }
                 }
             } else {
-                const localOrder = JSON.parse(localStorage.getItem('tatanggaq_active_order'));
                 if (localOrder && localOrder.status !== 'WAITING') {
                     playNotificationSoundAndVibe();
                     showCustomAlert("Perjalanan Selesai", "🎉 Perjalanan Anda telah diselesaikan oleh Driver!");
@@ -1229,6 +1227,7 @@
                 lastKnownAcceptedCount = 0;
                 resetAddressAndFare();
             }
+            
             updatePassengerAppUI();
         }, (error) => {
             console.error("Firestore Listener Error:", error);
