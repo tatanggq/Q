@@ -1185,31 +1185,40 @@
             updatePassengerStatusBoxGlobal(anyDriverOnline);
         });
 
-        // LISTENER STATUS ORDER PENUMPANG (AUTO-REFRESH KETIKA SELESAI / DIBATALKAN)
+        // LISTENER REAL-TIME STATUS ORDER PENUMPANG YANG DIPERBAIKI
         db.collection("iqbike_system").doc("active_order").onSnapshot((doc) => {
             if (doc.exists) {
                 const cloudOrder = doc.data();
-                if (cloudOrder.deviceUuid === passengerDeviceUuid) {
+                
+                if (cloudOrder.status === 'COMPLETED') {
+                    playNotificationSoundAndVibe();
+                    showCustomAlert("Perjalanan Selesai", "🎉 Perjalanan Anda telah diselesaikan oleh Driver. Terima kasih telah menggunakan TatanggaQ!");
+                    localStorage.removeItem('tatanggaq_active_order');
+                    resetAddressAndFare();
+                } else {
                     let rawAccepted = cloudOrder.acceptedDrivers || [];
                     const currentAcceptedCount = Array.isArray(rawAccepted) ? rawAccepted.length : 0;
                     if (currentAcceptedCount > lastKnownAcceptedCount) {
                         playNotificationSoundAndVibe();
                         lastKnownAcceptedCount = currentAcceptedCount;
                     }
+                    localStorage.setItem('tatanggaq_active_order', JSON.stringify(cloudOrder));
 
-                    // Jika order telah selesai oleh driver atau dibatalkan
-                    if (cloudOrder.status === 'COMPLETED') {
-                        playNotificationSoundAndVibe();
-                        showCustomAlert("Perjalanan Selesai", "🎉 Perjalanan Anda telah diselesaikan oleh Driver. Terima kasih telah menggunakan TatanggaQ!");
-                        localStorage.removeItem('tatanggaq_active_order');
-                        resetAddressAndFare();
-                    } else {
-                        localStorage.setItem('tatanggaq_active_order', JSON.stringify(cloudOrder));
+                    // REFRESH REAL-TIME DAFTAR DI MODAL DRIVER JIKA MODAL SEDANG TERBUKA
+                    const driverModal = document.getElementById('driverSelectionModal');
+                    if (driverModal && driverModal.style.display === 'flex') {
+                        renderAvailableDriversList();
                     }
                 }
             } else {
+                const localOrder = JSON.parse(localStorage.getItem('tatanggaq_active_order'));
+                if (localOrder && localOrder.status !== 'WAITING') {
+                    playNotificationSoundAndVibe();
+                    showCustomAlert("Perjalanan Selesai", "🎉 Perjalanan Anda telah diselesaikan oleh Driver!");
+                }
                 localStorage.removeItem('tatanggaq_active_order');
                 lastKnownAcceptedCount = 0;
+                resetAddressAndFare();
             }
             updatePassengerAppUI();
         });
@@ -1838,7 +1847,7 @@
 
         updatePassengerWaInputUI();
 
-        if (!order || (order.deviceUuid && order.deviceUuid !== passengerDeviceUuid) || order.status === 'CANCELLED_BY_PASSENGER') {
+        if (!order || order.status === 'CANCELLED_BY_PASSENGER') {
             btnSend.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Cari & Kirim Pesanan ke Driver`;
             btnSend.style.backgroundColor = ""; 
             btnSend.style.color = "#111";
