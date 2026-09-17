@@ -1185,7 +1185,7 @@
             updatePassengerStatusBoxGlobal(anyDriverOnline);
         });
 
-        // REAL-TIME LISTENER UTAMA (Diperbarui agar sinkronisasi instan reaktif otomatis tanpa refresh)
+        // REAL-TIME LISTENER UTAMA (Sinkronisasi instan reaktif otomatis tanpa refresh)
         db.collection("iqbike_system").doc("active_order").onSnapshot((doc) => {
             const localOrder = JSON.parse(localStorage.getItem('tatanggaq_active_order'));
 
