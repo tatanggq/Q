@@ -300,6 +300,7 @@
         .status-online { background-color: #f4fbe8; color: #3b7a00; border: 1px solid #d2ecc0; }
         .status-offline { background-color: #fce8e6; color: #c62828; border: 1px solid #f5c6cb; }
         .status-busy { background-color: #fbeae8; color: #eb5757; border: 1px solid #f7c6c2; }
+        .status-active-trip { background-color: #e3f2fd; color: #01579b; border: 1px solid #b3e5fc; }
 
         .form-row-2cols {
             display: grid;
@@ -774,7 +775,6 @@
             deferredPwaInstallPrompt.prompt();
             deferredPwaInstallPrompt.userChoice.then((choiceResult) => {
                 if (choiceResult.outcome === 'accepted') {
-                    console.log('Pengguna menyetujui instalasi PWA');
                     const installBtn = document.getElementById('btnHeaderInstallContainer');
                     if (installBtn) installBtn.style.display = 'none';
                 }
@@ -914,17 +914,14 @@
 
         const strictWaRegex = /^628\d{8,10}$/;
         if (!strictWaRegex.test(cleaned)) {
-            showCustomAlert("Format Salah", "❌ NOMOR TIDAK VALID!\n\nHarap masukkan nomor WhatsApp seluler Indonesia yang sah (11-13 digit, berawalan 08 / 628).");
+            showCustomAlert("Format Salah", "❌ NOMOR TIDAK VALID!\n\nHarap masukkan nomor WhatsApp seluler Indonesia yang sah.");
             return;
         }
 
         tempTargetPhone = cleaned;
         generatedOtpCode = Math.floor(1000 + Math.random() * 9000).toString();
 
-        const otpMessage = `🔐 *KODE VERIFIKASI TatanggaQ*\n\n` +
-                           `Kode OTP rahasia Anda adalah: *${generatedOtpCode}*\n\n` +
-                           `Masukkan kode ini ke aplikasi TatanggaQ untuk melanjutkan verifikasi nomor WhatsApp Anda.`;
-
+        const otpMessage = `🔐 *KODE VERIFIKASI TatanggaQ*\n\nKode OTP Anda adalah: *${generatedOtpCode}*`;
         const waUrl = `whatsapp://send?phone=${tempTargetPhone}&text=${encodeURIComponent(otpMessage)}`;
 
         document.getElementById('otpStep1Container').style.display = 'none';
@@ -935,7 +932,7 @@
     function verifyWaOtpCode() {
         const enteredOtp = document.getElementById('otpCodeInput').value.trim();
         if (enteredOtp !== generatedOtpCode) {
-            showCustomAlert("Kode Salah", "❌ Kode OTP Salah! Masukkan 4 digit kode yang dikirim ke WhatsApp Anda.");
+            showCustomAlert("Kode Salah", "❌ Kode OTP Salah!");
             return;
         }
 
@@ -1004,15 +1001,8 @@
                 'id': 'route',
                 'type': 'line',
                 'source': 'route',
-                'layout': {
-                    'line-join': 'round',
-                    'line-cap': 'round'
-                },
-                'paint': {
-                    'line-color': '#0288d1',
-                    'line-width': 5,
-                    'line-opacity': 0.8
-                }
+                'layout': { 'line-join': 'round', 'line-cap': 'round' },
+                'paint': { 'line-color': '#0288d1', 'line-width': 5, 'line-opacity': 0.8 }
             });
         });
 
@@ -1023,7 +1013,7 @@
     function togglePinMode(mode) {
         const activeOrder = JSON.parse(localStorage.getItem('tatanggaq_active_order'));
         if (mode === 'jemput' && activeOrder && activeOrder.status !== 'WAITING') {
-            showCustomAlert("Terkunci", "🔒 Lokasi Penjemputan telah TERKUNCI karena Driver sudah mengonfirmasi pesanan!");
+            showCustomAlert("Terkunci", "🔒 Lokasi Penjemputan telah TERKUNCI karena perjalanan aktif!");
             return;
         }
 
@@ -1152,7 +1142,6 @@
                     isInitialMapCenterDone = true;
                 }
 
-                localStorage.setItem('tatanggaq_passenger_gps', JSON.stringify(currentPos));
                 syncPassengerGpsToCloud(currentPos);
                 renderPassengerLocalMarkers(currentPos);
             }, null, { enableHighAccuracy: true });
@@ -1177,6 +1166,7 @@
         db.collection("iqbike_system").doc("active_order").delete().catch(() => {});
     }
 
+    // LISTENER REALTIME UTAMA YANG MENYINKRONKAN SEMUA STATUS DRIVER
     function listenCloudData() {
         db.collection("iqbike_drivers").onSnapshot((snapshot) => {
             let anyDriverOnline = false;
@@ -1186,24 +1176,11 @@
                 const data = doc.data();
                 if (data.lat && data.lng && data.isOnline === true) {
                     anyDriverOnline = true;
-                    const dLatLng = { lat: data.lat, lng: data.lng };
-                    
-                    const R = 6371e3;
-                    const φ1 = userCurrentLat * Math.PI/180;
-                    const φ2 = dLatLng.lat * Math.PI/180;
-                    const Δφ = (dLatLng.lat-userCurrentLat) * Math.PI/180;
-                    const Δλ = (dLatLng.lng-userCurrentLng) * Math.PI/180;
-                    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2) * Math.sin(Δλ/2);
-                    const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-
-                    if (map && dist <= 25000) {
-                        activeDriversList[doc.id] = data;
-                    }
+                    activeDriversList[doc.id] = data;
                 }
             });
 
             renderAllMultiDriversOnMap(activeDriversList);
-            updatePassengerStatusBoxGlobal(anyDriverOnline);
         });
 
         db.collection("iqbike_system").doc("active_order").onSnapshot((doc) => {
@@ -1212,30 +1189,18 @@
             if (doc.exists) {
                 const cloudOrder = doc.data();
                 
-                if (cloudOrder.deviceUuid && cloudOrder.deviceUuid !== passengerDeviceUuid && cloudOrder.status === 'WAITING') {
-                    return;
-                }
-
-                let rawAccepted = cloudOrder.acceptedDrivers || [];
-                let currentAcceptedCount = Array.isArray(rawAccepted) ? rawAccepted.length : 0;
-                let prevAcceptedCount = localOrder && localOrder.acceptedDrivers ? localOrder.acceptedDrivers.length : 0;
-
-                if ((localOrder && localOrder.status === 'WAITING' && cloudOrder.status !== 'WAITING') || (currentAcceptedCount > prevAcceptedCount)) {
+                // Bunyikan suara/getar jika status berubah real-time dari driver
+                if (localOrder && localOrder.status !== cloudOrder.status) {
                     playNotificationSoundAndVibe();
                 }
 
                 if (cloudOrder.status === 'COMPLETED') {
-                    playNotificationSoundAndVibe();
-                    showCustomAlert("Perjalanan Selesai", "🎉 Perjalanan Anda telah diselesaikan oleh Driver. Terima kasih telah menggunakan TatanggaQ!");
+                    showCustomAlert("Perjalanan Selesai", "🎉 Perjalanan Anda telah diselesaikan oleh Driver!");
                     localStorage.removeItem('tatanggaq_active_order');
                     resetAddressAndFare();
                 } else {
-                    // Hanya perbarui status order aktif jika tidak sedang memilih titik/mengetik aktif
-                    if (!currentPinMode) {
-                        localStorage.setItem('tatanggaq_active_order', JSON.stringify(cloudOrder));
-                        lastKnownAcceptedCount = currentAcceptedCount;
-                        updatePassengerAppUI();
-                    }
+                    localStorage.setItem('tatanggaq_active_order', JSON.stringify(cloudOrder));
+                    updatePassengerAppUI();
                 }
 
                 const driverModal = document.getElementById('driverSelectionModal');
@@ -1244,36 +1209,13 @@
                 }
             } else {
                 if (localOrder && localOrder.status !== 'WAITING') {
-                    playNotificationSoundAndVibe();
-                    showCustomAlert("Perjalanan Selesai", "🎉 Perjalanan Anda telah diselesaikan oleh Driver!");
+                    showCustomAlert("Perjalanan Selesai", "🎉 Perjalanan Anda telah selesai!");
                 }
                 localStorage.removeItem('tatanggaq_active_order');
-                lastKnownAcceptedCount = 0;
                 resetAddressAndFare();
                 updatePassengerAppUI();
             }
-        }, (error) => {
-            console.error("Firestore Listener Error:", error);
         });
-    }
-
-    function updatePassengerStatusBoxGlobal(anyOnline) {
-        const statusBox = document.getElementById('driverStatusBox');
-        if (!statusBox) return;
-        const order = JSON.parse(localStorage.getItem('tatanggaq_active_order'));
-        
-        if (!order) {
-            if (anyOnline) {
-                statusBox.className = "status-box status-online";
-                statusBox.innerHTML = `<i class="fa-solid fa-circle"></i> Driver Online & Siap Menerima Pesanan (Maks 25 km)`;
-            } else {
-                statusBox.className = "status-box status-offline";
-                statusBox.innerHTML = `<i class="fa-solid fa-circle"></i> Driver Sedang Offline`;
-            }
-        } else {
-            statusBox.className = "status-box status-busy";
-            statusBox.innerHTML = `<i class="fa-solid fa-motorcycle"></i> Status: ${order.status === 'WAITING' ? 'Mencari & Menunggu Driver...' : 'Perjalanan Berjalan (Bisa Ubah Tujuan)'}`;
-        }
     }
 
     function renderAllMultiDriversOnMap(driversObj) {
@@ -1289,7 +1231,7 @@
             const dData = driversObj[wa];
             if (!driverMarkersMap[wa]) {
                 const el = document.createElement('div');
-                el.innerHTML = '<i class="fa-solid fa-motorcycle" style="font-size:12px; color:#fff; background:#27ae60; padding:5px; border-radius:50%; border:2px solid #ffffff; box-shadow:0 2px 6px rgba(0,0,0,0.4);"></i>';
+                el.innerHTML = '<i class="fa-solid fa-motorcycle" style="font-size:12px; color:#fff; background:#27ae60; padding:5px; border-radius:50%; border:2px solid #fff;"></i>';
                 driverMarkersMap[wa] = new maplibregl.Marker({ element: el }).setLngLat([dData.lng, dData.lat]).addTo(map);
             } else {
                 driverMarkersMap[wa].setLngLat([dData.lng, dData.lat]);
@@ -1301,7 +1243,7 @@
         if (pos && map) {
             if (!passengerLiveMarker) {
                 const el = document.createElement('div');
-                el.innerHTML = '<i class="fa-solid fa-circle" style="font-size:14px; color:#0288d1; background:#ffffff; padding:3px; border-radius:50%; border:2px solid #0288d1; box-shadow:0 2px 6px rgba(0,0,0,0.4);"></i>';
+                el.innerHTML = '<i class="fa-solid fa-circle" style="font-size:14px; color:#0288d1; background:#fff; padding:3px; border-radius:50%; border:2px solid #0288d1;"></i>';
                 passengerLiveMarker = new maplibregl.Marker({ element: el }).setLngLat([pos.lng, pos.lat]).addTo(map);
             } else {
                 passengerLiveMarker.setLngLat([pos.lng, pos.lat]);
@@ -1313,36 +1255,15 @@
         if (map) {
             map.flyTo({ center: [userCurrentLng, userCurrentLat], zoom: 16 });
             document.getElementById('btnMyLocation').style.color = 'var(--accent-blue)';
-            if (currentPinMode) handleMapCenterChange({ lat: userCurrentLat, lng: userCurrentLng });
         }
     }
 
     function parseGoogleMapsLink(inputString, callback) {
-        const coordMatch = inputString.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/) || inputString.match(/q=(-?\d+\.\d+),(-?\d+\.\d+)/) || inputString.match(/place\/(-?\d+\.\d+)\D+(-?\d+\.\d+)/);
-        
+        const coordMatch = inputString.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/) || inputString.match(/q=(-?\d+\.\d+),(-?\d+\.\d+)/);
         if (coordMatch) {
-            const lat = parseFloat(coordMatch[1]);
-            const lng = parseFloat(coordMatch[2]);
-            callback({ lat, lng }, "Lokasi dari Link Google Maps");
+            callback({ lat: parseFloat(coordMatch[1]), lng: parseFloat(coordMatch[2]) }, "Lokasi Link Maps");
             return true;
         }
-
-        if (inputString.includes('goo.gl') || inputString.includes('maps.google.com') || inputString.startsWith('http')) {
-            showCustomAlert("Memproses Link", "⏳ Sedang membaca titik koordinat dari link Google Maps...");
-            fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(inputString)}&limit=1`)
-                .then(res => res.json())
-                .then(data => {
-                    if (data && data.length > 0) {
-                        callback({ lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) }, data[0].display_name);
-                    } else {
-                        showCustomAlert("Gagal Membaca Link", "❌ Link Google Maps tidak valid atau koordinat tidak ditemukan.");
-                    }
-                }).catch(() => {
-                    showCustomAlert("Gagal Membaca Link", "❌ Gagal memuat tautan Google Maps.");
-                });
-            return true;
-        }
-
         return false;
     }
 
@@ -1352,127 +1273,72 @@
         const query = document.getElementById(inputId).value.trim();
         const container = document.getElementById(resultsId);
 
-        const activeOrder = JSON.parse(localStorage.getItem('tatanggaq_active_order'));
-        if (type === 'jemput' && activeOrder && activeOrder.status !== 'WAITING') {
-            showCustomAlert("Terkunci", "🔒 Titik penjemputan sudah TERKUNCI!");
-            return;
-        }
-
         if (!query) {
             container.style.display = 'none';
-            if (type === 'jemput') { pickupCoords = null; if (pickupMarker) { pickupMarker.remove(); pickupMarker = null; } }
-            if (type === 'tujuan') { dropoffCoords = null; if (dropoffMarker) { dropoffMarker.remove(); dropoffMarker = null; } }
-            currentRouteDistanceMeters = 0;
-            calculateFare();
             return;
         }
 
-        if (query.includes('http://') || query.includes('https://') || query.includes('goo.gl')) {
-            container.style.display = 'none';
-            parseGoogleMapsLink(query, (latLng, addressName) => {
-                const shortName = addressName.split(',').slice(0, 3).join(',');
-                if (type === 'jemput') {
-                    document.getElementById('pickupLocation').value = shortName;
-                    pickupCoords = latLng;
-                } else {
-                    document.getElementById('dropoffLocation').value = shortName;
-                    dropoffCoords = latLng;
-                }
-                map.flyTo({ center: [latLng.lng, latLng.lat], zoom: 16 });
-                renderFixedMarkers();
-                calculateFare();
-                showCustomAlert("Berhasil", "📍 Titik lokasi berhasil dimuat dari link Google Maps!");
-            });
-            return;
-        }
-
-        if (query.length >= 3) {
-            clearTimeout(searchDebounce);
-            searchDebounce = setTimeout(() => {
-                fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=id&limit=5`)
-                    .then(res => res.json())
-                    .then(data => {
-                        container.innerHTML = '';
-                        if (data && data.length > 0) {
-                            data.forEach(item => {
-                                const div = document.createElement('div');
-                                div.className = 'search-item';
-                                div.innerText = item.display_name;
-                                div.onclick = function() {
-                                    const shortName = item.display_name.split(',').slice(0, 3).join(',');
-                                    const selectedLatLng = { lat: parseFloat(item.lat), lng: parseFloat(item.lon) };
-                                    
-                                    if (type === 'jemput') {
-                                        document.getElementById('pickupLocation').value = shortName;
-                                        pickupCoords = selectedLatLng;
-                                    } else {
-                                        document.getElementById('dropoffLocation').value = shortName;
-                                        dropoffCoords = selectedLatLng;
-                                    }
-                                    map.flyTo({ center: [selectedLatLng.lng, selectedLatLng.lat], zoom: 16 });
-                                    container.style.display = 'none';
-                                    renderFixedMarkers();
-                                };
-                                container.appendChild(div);
-                            });
-                            container.style.display = 'block';
-                        } else {
-                            container.style.display = 'none';
-                        }
-                    }).catch(() => { container.style.display = 'none'; });
-            }, 400);
-        } else {
-            container.style.display = 'none';
-        }
+        clearTimeout(searchDebounce);
+        searchDebounce = setTimeout(() => {
+            fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=id&limit=5`)
+                .then(res => res.json())
+                .then(data => {
+                    container.innerHTML = '';
+                    if (data && data.length > 0) {
+                        data.forEach(item => {
+                            const div = document.createElement('div');
+                            div.className = 'search-item';
+                            div.innerText = item.display_name;
+                            div.onclick = function() {
+                                const shortName = item.display_name.split(',').slice(0, 3).join(',');
+                                const selectedLatLng = { lat: parseFloat(item.lat), lng: parseFloat(item.lon) };
+                                
+                                if (type === 'jemput') {
+                                    document.getElementById('pickupLocation').value = shortName;
+                                    pickupCoords = selectedLatLng;
+                                } else {
+                                    document.getElementById('dropoffLocation').value = shortName;
+                                    dropoffCoords = selectedLatLng;
+                                }
+                                map.flyTo({ center: [selectedLatLng.lng, selectedLatLng.lat], zoom: 16 });
+                                container.style.display = 'none';
+                                renderFixedMarkers();
+                            };
+                            container.appendChild(div);
+                        });
+                        container.style.display = 'block';
+                    }
+                }).catch(() => {});
+        }, 400);
     }
 
     function computeDistanceFare(distanceInMeters) {
         let baseFare = (currentSelectedService === 'kurir') ? 10000 : 8000;
         let kmRate = 1800; 
-        let baseDistanceMeters = 3000; 
-
-        if (distanceInMeters <= baseDistanceMeters) {
-            return baseFare;
-        }
-
-        let extraMeters = distanceInMeters - baseDistanceMeters;
-        let fare = baseFare + (extraMeters / 1000 * kmRate);
-
-        return Math.ceil(fare / 500) * 500;
+        if (distanceInMeters <= 3000) return baseFare;
+        return Math.ceil((baseFare + ((distanceInMeters - 3000) / 1000 * kmRate)) / 500) * 500;
     }
 
     function calculateFare() {
         const serviceLabel = (currentSelectedService === 'kurir') ? 'Q-Rim' : 'Q-Ride';
-        if (!pickupCoords || !dropoffCoords || currentRouteDistanceMeters <= 0) {
-            if (pickupCoords && dropoffCoords) {
-                const R = 6371e3;
-                const φ1 = pickupCoords.lat * Math.PI/180;
-                const φ2 = dropoffCoords.lat * Math.PI/180;
-                const Δφ = (dropoffCoords.lat - pickupCoords.lat) * Math.PI/180;
-                const Δλ = (dropoffCoords.lng - pickupCoords.lng) * Math.PI/180;
-                const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2) * Math.sin(Δλ/2);
-                const straightDist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)) * 1.3;
+        if (pickupCoords && dropoffCoords) {
+            const R = 6371e3;
+            const φ1 = pickupCoords.lat * Math.PI/180;
+            const φ2 = dropoffCoords.lat * Math.PI/180;
+            const Δφ = (dropoffCoords.lat - pickupCoords.lat) * Math.PI/180;
+            const Δλ = (dropoffCoords.lng - pickupCoords.lng) * Math.PI/180;
+            const a = Math.sin(Δφ/2)**2 + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2)**2;
+            const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)) * 1.3;
 
-                computedTotalFare = computeDistanceFare(straightDist);
-                document.getElementById('fareText').innerText = `Rp ${computedTotalFare.toLocaleString('id-ID')} (~${(straightDist/1000).toFixed(1)} km - ${serviceLabel})`;
-            } else {
-                computedTotalFare = 0;
-                document.getElementById('fareText').innerText = "Rp 0";
-            }
-            return;
+            computedTotalFare = computeDistanceFare(dist);
+            document.getElementById('fareText').innerText = `Rp ${computedTotalFare.toLocaleString('id-ID')} (~${(dist/1000).toFixed(1)} km - ${serviceLabel})`;
+        } else {
+            computedTotalFare = 0;
+            document.getElementById('fareText').innerText = "Rp 0";
         }
-
-        computedTotalFare = computeDistanceFare(currentRouteDistanceMeters);
-        document.getElementById('fareText').innerText = `Rp ${computedTotalFare.toLocaleString('id-ID')} (${(currentRouteDistanceMeters/1000).toFixed(1)} km - ${serviceLabel})`;
     }
 
     function resetAddressAndFare() {
-        const activeOrder = JSON.parse(localStorage.getItem('tatanggaq_active_order'));
-        if (activeOrder && activeOrder.status !== 'WAITING') {
-            showCustomAlert("Terkunci", "🔒 Tidak dapat reset rute saat perjalanan sedang berlangsung!");
-            return;
-        }
-
         document.getElementById('pickupLocation').value = '';
         document.getElementById('dropoffLocation').value = '';
         pickupCoords = null; dropoffCoords = null;
@@ -1486,17 +1352,14 @@
 
     function handleMainActionButton() {
         const activeOrder = JSON.parse(localStorage.getItem('tatanggaq_active_order'));
-
         if (activeOrder && activeOrder.status !== 'WAITING') {
             openPassengerHistoryModal();
             return;
         }
-
         if (activeOrder && activeOrder.status === 'WAITING') {
             openDriverSelectionModal();
             return;
         }
-
         sendOrderToCloudRadar();
     }
 
@@ -1514,106 +1377,46 @@
         const order = JSON.parse(localStorage.getItem('tatanggaq_active_order'));
 
         if (!order || !order.acceptedDrivers || order.acceptedDrivers.length === 0) {
-            container.innerHTML = '<p style="font-size: 11px; color: #a0a0a0; text-align:center; padding:12px;">Belum ada Driver yang mengajukan diri. Mohon tunggu...</p>';
+            container.innerHTML = '<p style="font-size: 11px; color: #a0a0a0; text-align:center; padding:12px;">Belum ada Driver yang mengajukan diri.</p>';
             return;
         }
 
         db.collection("iqbike_drivers").get().then((snapshot) => {
-            let driversWithDistance = [];
-            
+            let list = [];
             snapshot.forEach((doc) => {
                 const dData = doc.data();
                 const docId = String(doc.id).trim();
-
-                const isMatched = order.acceptedDrivers.some(item => {
-                    if (!item) return false;
-                    let itemWa = "";
-                    if (typeof item === 'string') {
-                        itemWa = item;
-                    } else if (typeof item === 'object') {
-                        itemWa = item.wa || item.driverWa || item.id || "";
-                    }
-                    return String(itemWa).trim() === docId;
-                });
-
-                if (isMatched && dData.lat && dData.lng && dData.isOnline) {
-                    const R = 6371e3;
-                    const φ1 = dData.lat * Math.PI/180;
-                    const φ2 = order.pickupLat * Math.PI/180;
-                    const Δφ = (order.pickupLat - dData.lat) * Math.PI/180;
-                    const Δλ = (order.pickupLng - dData.lng) * Math.PI/180;
-                    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2) * Math.sin(Δλ/2);
-                    const distanceMeters = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-                    const distanceKm = distanceMeters / 1000;
-
-                    let pickupExtraFee = 0;
-                    if (distanceKm > 2.0 && distanceKm <= 25.0) {
-                        let extraMeters = distanceMeters - 2000;
-                        pickupExtraFee = computeDistanceFare(extraMeters + 3000) - (currentSelectedService === 'kurir' ? 10000 : 8000);
-                    }
-
-                    driversWithDistance.push({
-                        wa: docId, 
-                        distanceMeters, 
-                        distanceKm,
-                        distanceText: (distanceMeters >= 1000) ? distanceKm.toFixed(1) + " km" : Math.round(distanceMeters) + " meter",
-                        pickupExtraFee
-                    });
-                }
+                const isMatched = order.acceptedDrivers.some(item => String((typeof item === 'string' ? item : item.wa || item.id)).trim() === docId);
+                if (isMatched && dData.isOnline) list.push({ wa: docId });
             });
 
-            driversWithDistance.sort((a, b) => a.distanceMeters - b.distanceMeters);
             container.innerHTML = '';
-
-            if (driversWithDistance.length === 0) {
-                order.acceptedDrivers.forEach(rawItem => {
-                    const driverWa = (typeof rawItem === 'string') ? rawItem : (rawItem.wa || rawItem.driverWa || rawItem.id || "Driver");
-                    driversWithDistance.push({
-                        wa: driverWa,
-                        distanceMeters: 0,
-                        distanceText: "Dekat",
-                        pickupExtraFee: 0
-                    });
-                });
-            }
-
-            driversWithDriversUI(driversWithDistance, container);
+            list.forEach((driver) => {
+                const card = document.createElement('div');
+                card.style.cssText = "background:#2a2a2a; padding:10px; border-radius:8px; border:1px solid #444; display:flex; flex-direction:column; gap:6px;";
+                card.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span><i class="fa-solid fa-motorcycle" style="color:var(--whatsapp-green);"></i> <strong>Driver WA:</strong> ${driver.wa}</span>
+                    </div>
+                    <button onclick="passengerSelectDriver('${driver.wa}')" style="background:var(--whatsapp-green); color:#fff; border:none; padding:8px; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer;">
+                        <i class="fa-solid fa-check-circle"></i> Pilih Driver Ini
+                    </button>
+                `;
+                container.appendChild(card);
+            });
         });
     }
 
-    function driversWithDriversUI(driversWithDistance, container) {
-        container.innerHTML = '';
-        driversWithDistance.forEach((driver) => {
-            const feeText = driver.pickupExtraFee > 0 ? ` (+Rp ${driver.pickupExtraFee.toLocaleString('id-ID')} Tambahan Jemput)` : ` (Jemput FREE)`;
-            const card = document.createElement('div');
-            card.style.cssText = "background:#2a2a2a; padding:10px; border-radius:8px; border:1px solid #444; display:flex; flex-direction:column; gap:6px;";
-            card.innerHTML = `
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <span><i class="fa-solid fa-motorcycle" style="color:var(--whatsapp-green);"></i> <strong>Driver WA:</strong> ${driver.wa}</span>
-                    <span style="background:#0288d1; color:#fff; padding:2px 6px; border-radius:6px; font-size:10px; font-weight:bold;">${driver.distanceText} ${feeText}</span>
-                </div>
-                <button onclick="passengerSelectDriver('${driver.wa}', ${driver.pickupExtraFee})" style="background:var(--whatsapp-green); color:#fff; border:none; padding:8px; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer;">
-                    <i class="fa-solid fa-check-circle"></i> Pilih Driver Ini
-                </button>
-            `;
-            container.appendChild(card);
-        });
-    }
-
-    function passengerSelectDriver(driverWa, extraPickupFee = 0) {
+    function passengerSelectDriver(driverWa) {
         let order = JSON.parse(localStorage.getItem('tatanggaq_active_order'));
         if (!order) return;
-
         order.status = 'HEADING_PICKUP';
         order.assignedDriverWa = driverWa;
-        if (extraPickupFee > 0) order.fare += extraPickupFee;
         order.acceptedDrivers = [];
-
         localStorage.setItem('tatanggaq_active_order', JSON.stringify(order));
         syncOrderToCloud(order);
         closeDriverSelectionModal();
         updatePassengerAppUI();
-        showCustomAlert("Berhasil", `Driver (${driverWa}) berhasil dipilih!`);
     }
 
     function sendOrderToCloudRadar() {
@@ -1623,20 +1426,12 @@
         const dropoff = document.getElementById('dropoffLocation').value.trim();
         const note = document.getElementById('passengerNote').value.trim() || "-";
 
-        if (!pickup || !pickupCoords) {
-            showCustomAlert("Peringatan", "⚠️ Harap tentukan titik lokasi jemput di peta.");
+        if (!pickup || !pickupCoords || !dropoff || !dropoffCoords) {
+            showCustomAlert("Peringatan", "Harap tentukan titik jemput & tujuan di peta.");
             return;
         }
-        if (!dropoff || !dropoffCoords) {
-            showCustomAlert("Peringatan", "⚠️ Harap tentukan titik lokasi tujuan di peta.");
-            return;
-        }
-        if (!name) {
-            showCustomAlert("Peringatan", "Harap masukkan Nama Anda!");
-            return;
-        }
-        if (!rawPhone || rawPhone.length < 10) {
-            showCustomAlert("Peringatan", "⚠️ Nomor WhatsApp Penumpang belum terverifikasi!");
+        if (!name || !rawPhone) {
+            showCustomAlert("Peringatan", "Nama dan Nomor WA wajib diisi!");
             return;
         }
 
@@ -1654,296 +1449,96 @@
             note,
             acceptedDrivers: [],
             assignedDriverWa: null,
-            timestamp: Date.now(),
-            timeReceived: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-            dateString: new Date().toLocaleDateString()
+            timeReceived: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
         };
 
         localStorage.setItem('tatanggaq_active_order', JSON.stringify(newOrder));
         syncOrderToCloud(newOrder);
-
-        let passHistory = JSON.parse(localStorage.getItem('tatanggaq_passenger_history') || '[]');
-        passHistory.unshift(newOrder);
-        localStorage.setItem('tatanggaq_passenger_history', JSON.stringify(passHistory));
-
         updatePassengerAppUI();
-        renderPassengerHistory();
-        showCustomAlert("Informasi", "📡 Pesanan dikirim ke radar Driver terdekat (Maks 25 km).");
+        showCustomAlert("Informasi", "📡 Pesanan dikirim ke radar Driver.");
     }
 
     function cancelActiveOrder() {
         const order = JSON.parse(localStorage.getItem('tatanggaq_active_order'));
         if (!order) return;
-
-        if (confirm("⚠️ Batalkan pesanan ini dan kirim pesan pembatalan ke WhatsApp Driver?")) {
+        if (confirm("Batalkan pesanan ini?")) {
             order.status = 'CANCELLED_BY_PASSENGER';
             syncOrderToCloud(order);
-
-            if (order.assignedDriverWa) {
-                const cancelText = `Halo Driver (${order.assignedDriverWa}), mohon maaf pesanan TatanggaQ layanan *${order.serviceType.toUpperCase()}* dengan rute:\n` +
-                                   `📍 Jemput: ${order.pickup}\n` +
-                                   `🏁 Tujuan: ${order.dropoff}\n\n` +
-                                   `*DIBATALKAN* oleh penumpang. Terima kasih.`;
-                window.location.href = `whatsapp://send?phone=${order.assignedDriverWa}&text=${encodeURIComponent(cancelText)}`;
-            }
-
             localStorage.removeItem('tatanggaq_active_order');
             setTimeout(() => { removeOrderFromCloud(); }, 3000);
-
             resetAddressAndFare();
             updatePassengerAppUI();
-            showCustomAlert("Berhasil", "Pesanan dibatalkan.");
         }
     }
 
-    function repeatOrderFromHistory(pickup, dropoff, pLat, pLng, dLat, dLng, fare, service) {
-        document.getElementById('pickupLocation').value = pickup;
-        document.getElementById('dropoffLocation').value = dropoff;
-        pickupCoords = { lat: pLat, lng: pLng };
-        dropoffCoords = { lat: dLat, lng: dLng };
-        computedTotalFare = fare;
-        selectService(service);
-        renderFixedMarkers();
-        map.flyTo({ center: [pLng, pLat], zoom: 16 });
-        closePassengerHistoryModal();
-        showCustomAlert("Rute Dimuat", "✨ Rute pesanan berhasil dimuat kembali. Silakan klik tombol 'Cari & Kirim Pesanan'.");
-    }
+    function openPassengerHistoryModal() { document.getElementById('passengerHistoryModal').style.display = 'flex'; }
+    function closePassengerHistoryModal() { document.getElementById('passengerHistoryModal').style.display = 'none'; }
 
-    function swapRouteFromHistory(pickup, dropoff, pLat, pLng, dLat, dLng, fare, service) {
-        document.getElementById('pickupLocation').value = dropoff;
-        document.getElementById('dropoffLocation').value = pickup;
-        pickupCoords = { lat: dLat, lng: dLng };
-        dropoffCoords = { lat: pLat, lng: pLng };
-        computedTotalFare = fare;
-        selectService(service);
-        renderFixedMarkers();
-        map.flyTo({ center: [dLng, dLat], zoom: 16 });
-        closePassengerHistoryModal();
-        showCustomAlert("Rute Ditukar", "🔄 Rute Berhasil Ditukar (Pulang Pergi)! Silakan kirim pesanan.");
-    }
-
-    function openPassengerHistoryModal() {
-        document.getElementById('passengerHistoryModal').style.display = 'flex';
-        renderPassengerHistory();
-    }
-
-    function closePassengerHistoryModal() {
-        document.getElementById('passengerHistoryModal').style.display = 'none';
-    }
-
-    function openChangeDestModal() {
-        closePassengerHistoryModal();
-        document.getElementById('newDestinationInput').value = '';
-        tempNewDropoffCoords = null;
-        document.getElementById('changeDestModal').style.display = 'flex';
-    }
-
-    function closeChangeDestModal() {
-        document.getElementById('changeDestModal').style.display = 'none';
-    }
-
-    function handleNewDestSearchInput() {
-        const query = document.getElementById('newDestinationInput').value.trim();
-        const container = document.getElementById('newDestSearchResults');
-
-        if (!query || query.length < 3) {
-            container.style.display = 'none';
-            return;
-        }
-
-        if (query.includes('http://') || query.includes('https://') || query.includes('goo.gl')) {
-            container.style.display = 'none';
-            parseGoogleMapsLink(query, (latLng, addressName) => {
-                document.getElementById('newDestinationInput').value = addressName.split(',').slice(0, 3).join(',');
-                tempNewDropoffCoords = latLng;
-                showCustomAlert("Berhasil", "📍 Tujuan baru dimuat dari link Google Maps!");
-            });
-            return;
-        }
-
-        clearTimeout(newDestSearchDebounce);
-        newDestSearchDebounce = setTimeout(() => {
-            fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=id&limit=5`)
-                .then(res => res.json())
-                .then(data => {
-                    container.innerHTML = '';
-                    if (data && data.length > 0) {
-                        data.forEach(item => {
-                            const div = document.createElement('div');
-                            div.className = 'search-item';
-                            div.innerText = item.display_name;
-                            div.onclick = function() {
-                                document.getElementById('newDestinationInput').value = item.display_name.split(',').slice(0, 3).join(',');
-                                tempNewDropoffCoords = { lat: parseFloat(item.lat), lng: parseFloat(item.lon) };
-                                container.style.display = 'none';
-                            };
-                            container.appendChild(div);
-                        });
-                        container.style.display = 'block';
-                    } else {
-                        container.style.display = 'none';
-                    }
-                }).catch(() => { container.style.display = 'none'; });
-        }, 400);
-    }
-
-    function submitNewDestination() {
-        let order = JSON.parse(localStorage.getItem('tatanggaq_active_order'));
-        if (!order || !tempNewDropoffCoords) {
-            showCustomAlert("Peringatan", "Pilih titik tujuan baru dari daftar pencarian.");
-            return;
-        }
-
-        const R = 6371e3;
-        const φ1 = order.dropoffLat * Math.PI/180;
-        const φ2 = tempNewDropoffCoords.lat * Math.PI/180;
-        const Δφ = (tempNewDropoffCoords.lat - order.dropoffLat) * Math.PI/180;
-        const Δλ = (tempNewDropoffCoords.lng - order.dropoffLng) * Math.PI/180;
-        const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2) * Math.sin(Δλ/2);
-        const additionalDistMeters = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-
-        const additionalFare = computeDistanceFare(additionalDistMeters + 3000) - (order.serviceType === 'kurir' ? 10000 : 8000);
-
-        order.dropoff = document.getElementById('newDestinationInput').value;
-        order.dropoffLat = tempNewDropoffCoords.lat;
-        order.dropoffLng = tempNewDropoffCoords.lng;
-        order.fare += additionalFare;
-
-        localStorage.setItem('tatanggaq_active_order', JSON.stringify(order));
-        syncOrderToCloud(order);
-        closeChangeDestModal();
-        updatePassengerAppUI();
-        showCustomAlert("Sukses", `Tujuan berhasil diubah! Penambahan ongkos Rp ${additionalFare.toLocaleString('id-ID')}`);
-    }
-
-    function renderPassengerHistory() {
-        const container = document.getElementById('passengerHistoryContainer');
-        let passHistory = JSON.parse(localStorage.getItem('tatanggaq_passenger_history') || '[]');
-        const activeOrder = JSON.parse(localStorage.getItem('tatanggaq_active_order'));
-
-        container.innerHTML = '';
-
-        if (activeOrder && activeOrder.status !== 'WAITING') {
-            const actCard = document.createElement('div');
-            actCard.style.cssText = "background:#f4fbe8; border:1px solid var(--whatsapp-green); padding:10px; border-radius:8px; margin-bottom:8px;";
-            actCard.innerHTML = `
-                <div style="font-weight:bold; color:var(--whatsapp-green); margin-bottom:4px;"><i class="fa-solid fa-motorcycle"></i> Perjalanan Sedang Berlangsung</div>
-                <div style="font-size:11px; margin-bottom:6px;">Tujuan Saat Ini: ${activeOrder.dropoff}</div>
-                <button onclick="openChangeDestModal()" style="background:#0288d1; color:#fff; border:none; padding:6px 12px; border-radius:6px; font-weight:bold; font-size:11px; cursor:pointer;">
-                    <i class="fa-solid fa-pen-to-square"></i> Ubah Titik Tujuan
-                </button>
-            `;
-            container.appendChild(actCard);
-        }
-
-        if (passHistory.length === 0) {
-            const p = document.createElement('p');
-            p.style.cssText = "font-size: 11px; color: #a0a0a0; text-align:center;";
-            p.innerText = "Belum ada riwayat pesanan.";
-            container.appendChild(p);
-            return;
-        }
-
-        passHistory.forEach((item) => {
-            const serviceType = (item.serviceType || 'ojek').toLowerCase();
-            const card = document.createElement('div');
-            card.className = `history-card is-${serviceType}`;
-            
-            card.innerHTML = `
-                <div style="display:flex; justify-content:space-between; font-weight:bold;">
-                    <span style="color: ${serviceType === 'kurir' ? 'var(--accent-blue)' : 'var(--primary-hover)'}">
-                        [${serviceType === 'kurir' ? 'Q-RIM' : 'Q-RIDE'}] ${item.timeReceived || '-'}
-                    </span>
-                    <span style="color:#222;">Rp ${item.fare.toLocaleString('id-ID')}</span>
-                </div>
-                <div style="color:#666; font-size:11px;">
-                    <div><strong>📍 Jemput:</strong> ${item.pickup}</div>
-                    <div><strong>🏁 Tujuan:</strong> ${item.dropoff}</div>
-                </div>
-                <div style="display:flex; gap:6px; margin-top:4px;">
-                    <button class="btn-repeat-order" onclick="repeatOrderFromHistory('${item.pickup}', '${item.dropoff}', ${item.pickupLat}, ${item.pickupLng}, ${item.dropoffLat}, ${item.dropoffLng}, ${item.fare}, '${serviceType}')">
-                        <i class="fa-solid fa-rotate-right"></i> Ulangi
-                    </button>
-                    <button class="btn-swap-route" onclick="swapRouteFromHistory('${item.pickup}', '${item.dropoff}', ${item.pickupLat}, ${item.pickupLng}, ${item.dropoffLat}, ${item.dropoffLng}, ${item.fare}, '${serviceType}')">
-                        <i class="fa-solid fa-right-left"></i> Tukar PP
-                    </button>
-                </div>
-            `;
-            container.appendChild(card);
-        });
-    }
-
+    // PEMBARUAN TAMPILAN DINAMIS SESUAI STATUS DRIVER SECARA REAL-TIME
     function updatePassengerAppUI() {
         const order = JSON.parse(localStorage.getItem('tatanggaq_active_order'));
         const btnSend = document.getElementById('btnSendOrder');
         const btnCancel = document.getElementById('btnCancelOrder');
-        const btnJemput = document.getElementById('btnModeJemput');
-        const pickupInput = document.getElementById('pickupLocation');
-        const nameInput = document.getElementById('passengerName');
-        const phoneInput = document.getElementById('passengerPhone');
-        const noteInput = document.getElementById('passengerNote');
-        const dropoffInput = document.getElementById('dropoffLocation');
+        const statusBox = document.getElementById('driverStatusBox');
 
         updatePassengerWaInputUI();
 
         if (!order || order.status === 'CANCELLED_BY_PASSENGER') {
+            statusBox.className = "status-box status-online";
+            statusBox.innerHTML = `<i class="fa-solid fa-circle"></i> Driver Online & Siap Menerima Pesanan`;
             btnSend.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Cari & Kirim Pesanan ke Driver`;
             btnSend.style.backgroundColor = ""; 
             btnSend.style.color = "#111";
-            btnSend.disabled = false;
             btnCancel.style.display = 'none';
-            btnJemput.disabled = false;
-            pickupInput.disabled = false;
-            nameInput.disabled = false;
-            phoneInput.disabled = false;
-            noteInput.disabled = false;
-            dropoffInput.disabled = false;
             return;
         }
 
-        nameInput.value = order.passengerName || '';
-        phoneInput.value = order.passengerPhone || '';
-        noteInput.value = order.note !== '-' ? order.note : '';
-        pickupInput.value = order.pickup || '';
-        dropoffInput.value = order.dropoff || '';
-
-        if (order.serviceType) {
-            selectService(order.serviceType);
-        }
-
         if (order.status === 'WAITING') {
-            let rawAccepted = order.acceptedDrivers || [];
-            let countAccepted = Array.isArray(rawAccepted) ? rawAccepted.length : 0;
-            btnSend.innerHTML = `<i class="fa-solid fa-motorcycle"></i> Lihat Pilihan Driver Terdekat (${countAccepted} Mengajukan)`;
+            let countAccepted = Array.isArray(order.acceptedDrivers) ? order.acceptedDrivers.length : 0;
+            statusBox.className = "status-box status-busy";
+            statusBox.innerHTML = `<i class="fa-solid fa-motorcycle"></i> Status: Menunggu Driver Mengonfirmasi... (${countAccepted} Mengajukan)`;
+            btnSend.innerHTML = `<i class="fa-solid fa-motorcycle"></i> Lihat Pilihan Driver Terdekat (${countAccepted})`;
             btnSend.style.backgroundColor = ""; 
             btnSend.style.color = "#111";
             btnCancel.style.display = 'flex';
-        } else {
-            nameInput.disabled = true;
-            phoneInput.disabled = true;
-            noteInput.disabled = true;
-            pickupInput.disabled = true;
-            btnJemput.disabled = true;
-            btnCancel.style.display = 'flex';
-            btnSend.innerHTML = `<i class="fa-brands fa-whatsapp"></i> Chat Driver (${order.assignedDriverWa}) / Ubah Tujuan`;
+        } 
+        else if (order.status === 'HEADING_PICKUP') {
+            statusBox.className = "status-box status-active-trip";
+            statusBox.innerHTML = `<i class="fa-solid fa-person-biking"></i> Driver (${order.assignedDriverWa}) Sedang OTW ke Titik Jemput!`;
+            btnSend.innerHTML = `<i class="fa-brands fa-whatsapp"></i> Chat Driver (OTW Jemput)`;
             btnSend.style.backgroundColor = 'var(--whatsapp-green)';
             btnSend.style.color = '#ffffff';
+            btnCancel.style.display = 'flex';
         }
-
-        // Hanya timpa nilai fare jika sedang tidak menggeser titik di peta / mengatur rute baru
-        if (!currentPinMode && pickupCoords && dropoffCoords) {
-            computedTotalFare = order.fare;
-            document.getElementById('fareText').innerText = `Rp ${order.fare.toLocaleString('id-ID')}`;
-            pickupCoords = { lat: order.pickupLat, lng: order.pickupLng };
-            dropoffCoords = { lat: order.dropoffLat, lng: order.dropoffLng };
-            renderFixedMarkers();
+        else if (order.status === 'ARRIVED_PICKUP') {
+            statusBox.className = "status-box status-active-trip";
+            statusBox.innerHTML = `<i class="fa-solid fa-location-dot" style="color:var(--accent-red)"></i> Driver Sudah Tiba di Titik Jemput! Silakan temui driver.`;
+            btnSend.innerHTML = `<i class="fa-brands fa-whatsapp"></i> Chat Driver (Tiba di Jemput)`;
+            btnSend.style.backgroundColor = 'var(--whatsapp-green)';
+            btnSend.style.color = '#ffffff';
+            btnCancel.style.display = 'flex';
+        }
+        else if (order.status === 'HEADING_DROPOFF') {
+            statusBox.className = "status-box status-active-trip";
+            statusBox.innerHTML = `<i class="fa-solid fa-route"></i> Perjalanan Berlangsung: Driver OTW Mengantar ke Tujuan.`;
+            btnSend.innerHTML = `<i class="fa-brands fa-whatsapp"></i> Chat Driver (OTW Tujuan)`;
+            btnSend.style.backgroundColor = 'var(--whatsapp-green)';
+            btnSend.style.color = '#ffffff';
+            btnCancel.style.display = 'none';
+        }
+        else if (order.status === 'ARRIVED_DROPOFF') {
+            statusBox.className = "status-box status-online";
+            statusBox.innerHTML = `<i class="fa-solid fa-flag-checkered"></i> Driver Telah Tiba di Titik Tujuan.`;
+            btnSend.innerHTML = `<i class="fa-solid fa-check"></i> Selesaikan Pesanan`;
+            btnSend.style.backgroundColor = 'var(--primary-color)';
+            btnSend.style.color = '#111';
+            btnCancel.style.display = 'none';
         }
     }
 
     window.onload = function() {
         initMap();
         updatePassengerAppUI();
-        renderPassengerHistory();
         checkPwaDisplayMode();
     };
 </script>
