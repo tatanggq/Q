@@ -1961,5 +1961,26 @@
         startAutoPollingSync(); // Menjalankan polling otomatis super cepat
     };
 </script>
+    // Trigger 1: Paksa sinkronisasi instan saat layar disentuh di sisi manapun (mengatasi throttling split-screen)
+['pointerdown', 'touchstart', 'visibilitychange', 'focus'].forEach(eventType => {
+    window.addEventListener(eventType, () => {
+        if (document.visibilityState === 'visible' || eventType === 'pointerdown' || eventType === 'touchstart') {
+            // Paksa Firestore memperbarui koneksi jaringan agar data langsung ditarik
+            db.disableNetwork().then(() => {
+                return db.enableNetwork();
+            }).then(() => {
+                // Ambil data dokumen aktif terbaru secara paksa dari server (bypass cache lokal)
+                return db.collection("iqbike_system").doc("active_order").get({ source: "server" });
+            }).then((doc) => {
+                if (doc.exists) {
+                    const cloudOrder = doc.data();
+                    localStorage.setItem('iqbike_active_order', JSON.stringify(cloudOrder));
+                    if (typeof updatePassengerAppUI === 'function') updatePassengerAppUI();
+                    if (typeof updateDriverAppUI === 'function') updateDriverAppUI();
+                }
+            }).catch(() => {});
+        }
+    }, { passive: true });
+});
 </body>
 </html>
