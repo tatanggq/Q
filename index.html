@@ -1195,7 +1195,6 @@
             updatePassengerStatusBoxGlobal(anyDriverOnline);
         });
 
-        // REAL-TIME LISTENER UTAMA
         db.collection("iqbike_system").doc("active_order").onSnapshot((doc) => {
             const localOrder = JSON.parse(localStorage.getItem('tatanggaq_active_order'));
 
@@ -1924,7 +1923,6 @@
         renderFixedMarkers();
     }
 
-    // Interval Polling Super Cepat (500ms / 0.5 detik - Real-Time Instan Tanpa Sentuh Layar)
     function startAutoPollingSync() {
         setInterval(() => {
             db.collection("iqbike_system").doc("active_order").get({ source: "server" }).then((doc) => {
@@ -1951,36 +1949,34 @@
                     updatePassengerAppUI();
                 }
             }).catch(() => {});
-        }, 500); // Mengecek server setiap 0.5 detik secara otomatis
+        }, 500);
     }
+
+    // Trigger Sinkronisasi Instan Anti-Throttling Split-Screen
+    ['pointerdown', 'touchstart', 'visibilitychange', 'focus'].forEach(eventType => {
+        window.addEventListener(eventType, () => {
+            if (document.visibilityState === 'visible' || eventType === 'pointerdown' || eventType === 'touchstart') {
+                db.disableNetwork().then(() => {
+                    return db.enableNetwork();
+                }).then(() => {
+                    return db.collection("iqbike_system").doc("active_order").get({ source: "server" });
+                }).then((doc) => {
+                    if (doc.exists) {
+                        const cloudOrder = doc.data();
+                        localStorage.setItem('tatanggaq_active_order', JSON.stringify(cloudOrder));
+                        if (typeof updatePassengerAppUI === 'function') updatePassengerAppUI();
+                    }
+                }).catch(() => {});
+            }
+        }, { passive: true });
+    });
 
     window.onload = function() {
         initMap();
         updatePassengerAppUI();
         renderPassengerHistory();
-        startAutoPollingSync(); // Menjalankan polling otomatis super cepat
+        startAutoPollingSync();
     };
 </script>
-    // Trigger 1: Paksa sinkronisasi instan saat layar disentuh di sisi manapun (mengatasi throttling split-screen)
-['pointerdown', 'touchstart', 'visibilitychange', 'focus'].forEach(eventType => {
-    window.addEventListener(eventType, () => {
-        if (document.visibilityState === 'visible' || eventType === 'pointerdown' || eventType === 'touchstart') {
-            // Paksa Firestore memperbarui koneksi jaringan agar data langsung ditarik
-            db.disableNetwork().then(() => {
-                return db.enableNetwork();
-            }).then(() => {
-                // Ambil data dokumen aktif terbaru secara paksa dari server (bypass cache lokal)
-                return db.collection("iqbike_system").doc("active_order").get({ source: "server" });
-            }).then((doc) => {
-                if (doc.exists) {
-                    const cloudOrder = doc.data();
-                    localStorage.setItem('iqbike_active_order', JSON.stringify(cloudOrder));
-                    if (typeof updatePassengerAppUI === 'function') updatePassengerAppUI();
-                    if (typeof updateDriverAppUI === 'function') updateDriverAppUI();
-                }
-            }).catch(() => {});
-        }
-    }, { passive: true });
-});
 </body>
 </html>
