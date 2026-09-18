@@ -1256,7 +1256,7 @@
         });
     }
 
-    function updatePassengerStatusBoxGlobal(anyOnline) {
+   function updatePassengerStatusBoxGlobal(anyOnline) {
         const statusBox = document.getElementById('driverStatusBox');
         if (!statusBox) return;
         const order = JSON.parse(localStorage.getItem('tatanggaq_active_order'));
@@ -1270,8 +1270,20 @@
                 statusBox.innerHTML = `<i class="fa-solid fa-circle"></i> Driver Sedang Offline`;
             }
         } else {
+            // Status tahapan driver secara spesifik
+            let detailStatusText = 'Perjalanan Berjalan';
+            if (order.status === 'WAITING') {
+                detailStatusText = 'Mencari & Menunggu Driver Menerima...';
+            } else if (order.status === 'HEADING_PICKUP') {
+                detailStatusText = '🛵 Driver Otw Menjemput ke Titik Jemput';
+            } else if (order.status === 'ARRIVED') {
+                detailStatusText = '📍 Driver Sudah Tiba di Titik Jemput';
+            } else if (order.status === 'ON_TRIP') {
+                detailStatusText = '🏁 Driver Otw Mengantar ke Tujuan';
+            }
+
             statusBox.className = "status-box status-busy";
-            statusBox.innerHTML = `<i class="fa-solid fa-motorcycle"></i> Status: ${order.status === 'WAITING' ? 'Mencari & Menunggu Driver...' : 'Perjalanan Berjalan (Bisa Ubah Tujuan)'}`;
+            statusBox.innerHTML = `<i class="fa-solid fa-motorcycle"></i> Status: ${detailStatusText}`;
         }
     }
 
