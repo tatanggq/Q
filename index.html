@@ -1924,36 +1924,42 @@
         renderFixedMarkers();
     }
 
-    // Tunggal window.onload dengan logika sinkronisasi split-screen & visibility yang bersih
-    window.onload = function() {
-        initMap();
-        updatePassengerAppUI();
-        renderPassengerHistory();
-    };
-
-    document.addEventListener("visibilitychange", () => {
-        if (!document.hidden) {
+    // Interval Polling Super Cepat (500ms / 0.5 detik - Real-Time Instan Tanpa Sentuh Layar)
+    function startAutoPollingSync() {
+        setInterval(() => {
             db.collection("iqbike_system").doc("active_order").get({ source: "server" }).then((doc) => {
                 if (doc.exists) {
-                    localStorage.setItem('tatanggaq_active_order', JSON.stringify(doc.data()));
+                    const cloudOrder = doc.data();
+                    const localOrder = JSON.parse(localStorage.getItem('tatanggaq_active_order'));
+                    
+                    let currentAcceptedCount = Array.isArray(cloudOrder.acceptedDrivers) ? cloudOrder.acceptedDrivers.length : 0;
+                    let prevAcceptedCount = localOrder && localOrder.acceptedDrivers ? localOrder.acceptedDrivers.length : 0;
+
+                    if ((localOrder && localOrder.status === 'WAITING' && cloudOrder.status !== 'WAITING') || (currentAcceptedCount > prevAcceptedCount)) {
+                        playNotificationSoundAndVibe();
+                    }
+
+                    localStorage.setItem('tatanggaq_active_order', JSON.stringify(cloudOrder));
                 } else {
+                    const localOrder = JSON.parse(localStorage.getItem('tatanggaq_active_order'));
+                    if (localOrder && localOrder.status !== 'WAITING') {
+                        playNotificationSoundAndVibe();
+                    }
                     localStorage.removeItem('tatanggaq_active_order');
                 }
                 if (typeof updatePassengerAppUI === 'function') {
                     updatePassengerAppUI();
                 }
             }).catch(() => {});
-        }
-    });
+        }, 500); // Mengecek server setiap 0.5 detik secara otomatis
+    }
 
-    window.addEventListener('touchstart', () => {
-        db.collection("iqbike_system").doc("active_order").get({ source: "server" }).then((doc) => {
-            if (doc.exists) {
-                localStorage.setItem('tatanggaq_active_order', JSON.stringify(doc.data()));
-                if (typeof updatePassengerAppUI === 'function') updatePassengerAppUI();
-            }
-        }).catch(() => {});
-    }, { passive: true });
+    window.onload = function() {
+        initMap();
+        updatePassengerAppUI();
+        renderPassengerHistory();
+        startAutoPollingSync(); // Menjalankan polling otomatis super cepat
+    };
 </script>
 </body>
 </html>
