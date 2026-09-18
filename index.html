@@ -1930,6 +1930,16 @@
         renderPassengerHistory();
     };
 </script>
+    // Memaksa sinkronisasi seketika saat layar HP di-tap/sentuh di mode split screen
+    window.addEventListener('touchstart', () => {
+        db.collection("iqbike_system").doc("active_order").get({ source: "server" }).then((doc) => {
+            if (doc.exists) {
+                localStorage.setItem('tatanggaq_active_order', JSON.stringify(doc.data()));
+                if (typeof updatePassengerAppUI === 'function') updatePassengerAppUI();
+                if (typeof fetchActiveOrders === 'function') fetchActiveOrders();
+            }
+        }).catch(() => {});
+    }, { passive: true });
 
 </body>
 </html>
