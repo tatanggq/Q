@@ -1230,7 +1230,6 @@
                     localStorage.removeItem('tatanggaq_active_order');
                     resetAddressAndFare();
                 } else {
-                    // Hanya perbarui status order aktif jika tidak sedang memilih titik/mengetik aktif
                     if (!currentPinMode) {
                         localStorage.setItem('tatanggaq_active_order', JSON.stringify(cloudOrder));
                         lastKnownAcceptedCount = currentAcceptedCount;
@@ -1509,6 +1508,7 @@
         document.getElementById('driverSelectionModal').style.display = 'none';
     }
 
+    // FUNGSI renderAvailableDriversList() YANG SUDAH DISESUAIKAN DENGAN TATANGGAQ
     function renderAvailableDriversList() {
         const container = document.getElementById('availableDriversListContainer');
         const order = JSON.parse(localStorage.getItem('tatanggaq_active_order'));
@@ -1578,6 +1578,8 @@
             }
 
             driversWithDriversUI(driversWithDistance, container);
+        }).catch(err => {
+            console.log("Error fetching drivers distance:", err);
         });
     }
 
@@ -1930,7 +1932,6 @@
             btnSend.style.color = '#ffffff';
         }
 
-        // Hanya timpa nilai fare jika sedang tidak menggeser titik di peta / mengatur rute baru
         if (!currentPinMode && pickupCoords && dropoffCoords) {
             computedTotalFare = order.fare;
             document.getElementById('fareText').innerText = `Rp ${order.fare.toLocaleString('id-ID')}`;
