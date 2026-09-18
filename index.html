@@ -753,17 +753,27 @@
         deferredPwaInstallPrompt = e;
     });
 
-    function triggerPwaInstallPrompt() {
-        if (deferredPwaInstallPrompt) {
-            deferredPwaInstallPrompt.prompt();
-            deferredPwaInstallPrompt.userChoice.then(() => {
-                deferredPwaInstallPrompt = null;
-            });
-        } else {
-            showCustomAlert("Pemberitahuan", "✨ Buka menu titik tiga di browser Anda (kanan atas) dan pilih opsi 'Tambahkan ke Layar Utama' atau 'Install Aplikasi'.");
-        }
+   function triggerPwaInstallPrompt() {
+    // Cek apakah berjalan di dalam WebView Hybrid/APK
+    const isWebView = /(wv|Instagram|FBAN|FBAV)/i.test(navigator.userAgent) || window.navigator.standalone === true;
+
+    if (isWebView) {
+        showCustomAlert("Informasi Aplikasi", "ℹ️ Anda sedang membuka TatanggaQ melalui WebView/Aplikasi pembungkus.\n\nUntuk pengalaman terbaik & instalasi PWA resmi tanpa peringatan keamanan, silakan buka link ini langsung melalui browser Google Chrome di HP Anda.");
+        return;
     }
 
+    if (deferredPwaInstallPrompt) {
+        deferredPwaInstallPrompt.prompt();
+        deferredPwaInstallPrompt.userChoice.then((choiceResult) => {
+            if (choiceResult.outcome === 'accepted') {
+                console.log('Pengguna menyetujui instalasi PWA');
+            }
+            deferredPwaInstallPrompt = null;
+        });
+    } else {
+        showCustomAlert("Cara Install PWA", "✨ Untuk menginstal TatanggaQ:\n\n1. Ketuk ikon titik tiga (⋮) di pojok kanan atas browser Chrome Anda.\n2. Pilih menu 'Tambahkan ke Layar Utama' (Add to Home Screen) atau 'Install Aplikasi'.");
+    }
+}
     function playNotificationSoundAndVibe() {
         if (navigator.vibrate) {
             navigator.vibrate([200, 100, 200]);
