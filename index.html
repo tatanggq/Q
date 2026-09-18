@@ -753,27 +753,27 @@
         deferredPwaInstallPrompt = e;
     });
 
-   function triggerPwaInstallPrompt() {
-    // Cek apakah berjalan di dalam WebView Hybrid/APK
-    const isWebView = /(wv|Instagram|FBAN|FBAV)/i.test(navigator.userAgent) || window.navigator.standalone === true;
+    function triggerPwaInstallPrompt() {
+        const isWebView = /(wv|Instagram|FBAN|FBAV)/i.test(navigator.userAgent) || window.navigator.standalone === true;
 
-    if (isWebView) {
-        showCustomAlert("Informasi Aplikasi", "ℹ️ Anda sedang membuka TatanggaQ melalui WebView/Aplikasi pembungkus.\n\nUntuk pengalaman terbaik & instalasi PWA resmi tanpa peringatan keamanan, silakan buka link ini langsung melalui browser Google Chrome di HP Anda.");
-        return;
+        if (isWebView) {
+            showCustomAlert("Informasi Aplikasi", "ℹ️ Anda sedang membuka TatanggaQ melalui WebView/Aplikasi pembungkus.\n\nUntuk pengalaman terbaik & instalasi PWA resmi tanpa peringatan keamanan, silakan buka link ini langsung melalui browser Google Chrome di HP Anda.");
+            return;
+        }
+
+        if (deferredPwaInstallPrompt) {
+            deferredPwaInstallPrompt.prompt();
+            deferredPwaInstallPrompt.userChoice.then((choiceResult) => {
+                if (choiceResult.outcome === 'accepted') {
+                    console.log('Pengguna menyetujui instalasi PWA');
+                }
+                deferredPwaInstallPrompt = null;
+            });
+        } else {
+            showCustomAlert("Cara Install PWA", "✨ Untuk menginstal TatanggaQ:\n\n1. Ketuk ikon titik tiga (⋮) di pojok kanan atas browser Chrome Anda.\n2. Pilih menu 'Tambahkan ke Layar Utama' (Add to Home Screen) atau 'Install Aplikasi'.");
+        }
     }
 
-    if (deferredPwaInstallPrompt) {
-        deferredPwaInstallPrompt.prompt();
-        deferredPwaInstallPrompt.userChoice.then((choiceResult) => {
-            if (choiceResult.outcome === 'accepted') {
-                console.log('Pengguna menyetujui instalasi PWA');
-            }
-            deferredPwaInstallPrompt = null;
-        });
-    } else {
-        showCustomAlert("Cara Install PWA", "✨ Untuk menginstal TatanggaQ:\n\n1. Ketuk ikon titik tiga (⋮) di pojok kanan atas browser Chrome Anda.\n2. Pilih menu 'Tambahkan ke Layar Utama' (Add to Home Screen) atau 'Install Aplikasi'.");
-    }
-}
     function playNotificationSoundAndVibe() {
         if (navigator.vibrate) {
             navigator.vibrate([200, 100, 200]);
@@ -1195,7 +1195,7 @@
             updatePassengerStatusBoxGlobal(anyDriverOnline);
         });
 
-        // REAL-TIME LISTENER UTAMA (Sinkronisasi instan reaktif otomatis tanpa refresh)
+        // REAL-TIME LISTENER UTAMA
         db.collection("iqbike_system").doc("active_order").onSnapshot((doc) => {
             const localOrder = JSON.parse(localStorage.getItem('tatanggaq_active_order'));
 
@@ -1924,23 +1924,15 @@
         renderFixedMarkers();
     }
 
-    window.onload = function() {
-        initMap();
-        updatePassengerAppUI();
-        renderPassengerHistory();
-    };
-    // (Fungsi-fungsi lain yang sudah ada di atasnya...)
-
+    // Tunggal window.onload dengan logika sinkronisasi split-screen & visibility yang bersih
     window.onload = function() {
         initMap();
         updatePassengerAppUI();
         renderPassengerHistory();
     };
 
-    // SISIPKAN KODE VISIBILITY CHANGE DI SINI:
     document.addEventListener("visibilitychange", () => {
         if (!document.hidden) {
-            console.log("Jendela aktif kembali, memaksa sinkronisasi data...");
             db.collection("iqbike_system").doc("active_order").get({ source: "server" }).then((doc) => {
                 if (doc.exists) {
                     localStorage.setItem('tatanggaq_active_order', JSON.stringify(doc.data()));
@@ -1950,25 +1942,18 @@
                 if (typeof updatePassengerAppUI === 'function') {
                     updatePassengerAppUI();
                 }
-                if (typeof fetchActiveOrders === 'function') {
-                    fetchActiveOrders();
-                }
-            }).catch((err) => {
-                console.error("Gagal sinkronisasi server:", err);
-            });
+            }).catch(() => {});
         }
     });
-</script>
-    // Memaksa sinkronisasi seketika saat layar HP di-tap/sentuh di mode split screen
+
     window.addEventListener('touchstart', () => {
         db.collection("iqbike_system").doc("active_order").get({ source: "server" }).then((doc) => {
             if (doc.exists) {
                 localStorage.setItem('tatanggaq_active_order', JSON.stringify(doc.data()));
                 if (typeof updatePassengerAppUI === 'function') updatePassengerAppUI();
-                if (typeof fetchActiveOrders === 'function') fetchActiveOrders();
             }
         }).catch(() => {});
     }, { passive: true });
-
+</script>
 </body>
 </html>
