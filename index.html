@@ -617,7 +617,7 @@
             <span>TatanggaQ</span>
         </div>
         <div class="header-actions">
-            <button class="btn-header-install" onclick="triggerPwaInstallPrompt()">
+            <button id="btnHeaderInstallContainer" class="btn-header-install" onclick="triggerPwaInstallPrompt()">
                 <i class="fa-solid fa-download"></i> Install
             </button>
         </div>
@@ -751,7 +751,16 @@
     window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredPwaInstallPrompt = e;
+        checkPwaDisplayMode();
     });
+
+    function checkPwaDisplayMode() {
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+        const installBtn = document.getElementById('btnHeaderInstallContainer');
+        if (isStandalone && installBtn) {
+            installBtn.style.display = 'none';
+        }
+    }
 
     function triggerPwaInstallPrompt() {
         const isWebView = /(wv|Instagram|FBAN|FBAV)/i.test(navigator.userAgent) || window.navigator.standalone === true;
@@ -766,6 +775,8 @@
             deferredPwaInstallPrompt.userChoice.then((choiceResult) => {
                 if (choiceResult.outcome === 'accepted') {
                     console.log('Pengguna menyetujui instalasi PWA');
+                    const installBtn = document.getElementById('btnHeaderInstallContainer');
+                    if (installBtn) installBtn.style.display = 'none';
                 }
                 deferredPwaInstallPrompt = null;
             });
@@ -1219,13 +1230,17 @@
                     localStorage.removeItem('tatanggaq_active_order');
                     resetAddressAndFare();
                 } else {
-                    localStorage.setItem('tatanggaq_active_order', JSON.stringify(cloudOrder));
-                    lastKnownAcceptedCount = currentAcceptedCount;
-
-                    const driverModal = document.getElementById('driverSelectionModal');
-                    if (driverModal && driverModal.style.display === 'flex') {
-                        renderAvailableDriversList();
+                    // Hanya perbarui status order aktif jika tidak sedang memilih titik/mengetik aktif
+                    if (!currentPinMode) {
+                        localStorage.setItem('tatanggaq_active_order', JSON.stringify(cloudOrder));
+                        lastKnownAcceptedCount = currentAcceptedCount;
+                        updatePassengerAppUI();
                     }
+                }
+
+                const driverModal = document.getElementById('driverSelectionModal');
+                if (driverModal && driverModal.style.display === 'flex') {
+                    renderAvailableDriversList();
                 }
             } else {
                 if (localOrder && localOrder.status !== 'WAITING') {
@@ -1235,9 +1250,8 @@
                 localStorage.removeItem('tatanggaq_active_order');
                 lastKnownAcceptedCount = 0;
                 resetAddressAndFare();
+                updatePassengerAppUI();
             }
-            
-            updatePassengerAppUI();
         }, (error) => {
             console.error("Firestore Listener Error:", error);
         });
@@ -1916,66 +1930,21 @@
             btnSend.style.color = '#ffffff';
         }
 
-        computedTotalFare = order.fare;
-        document.getElementById('fareText').innerText = `Rp ${order.fare.toLocaleString('id-ID')}`;
-        pickupCoords = { lat: order.pickupLat, lng: order.pickupLng };
-        dropoffCoords = { lat: order.dropoffLat, lng: order.dropoffLng };
-        renderFixedMarkers();
+        // Hanya timpa nilai fare jika sedang tidak menggeser titik di peta / mengatur rute baru
+        if (!currentPinMode && pickupCoords && dropoffCoords) {
+            computedTotalFare = order.fare;
+            document.getElementById('fareText').innerText = `Rp ${order.fare.toLocaleString('id-ID')}`;
+            pickupCoords = { lat: order.pickupLat, lng: order.pickupLng };
+            dropoffCoords = { lat: order.dropoffLat, lng: order.dropoffLng };
+            renderFixedMarkers();
+        }
     }
-
-    function startAutoPollingSync() {
-        setInterval(() => {
-            db.collection("iqbike_system").doc("active_order").get({ source: "server" }).then((doc) => {
-                if (doc.exists) {
-                    const cloudOrder = doc.data();
-                    const localOrder = JSON.parse(localStorage.getItem('tatanggaq_active_order'));
-                    
-                    let currentAcceptedCount = Array.isArray(cloudOrder.acceptedDrivers) ? cloudOrder.acceptedDrivers.length : 0;
-                    let prevAcceptedCount = localOrder && localOrder.acceptedDrivers ? localOrder.acceptedDrivers.length : 0;
-
-                    if ((localOrder && localOrder.status === 'WAITING' && cloudOrder.status !== 'WAITING') || (currentAcceptedCount > prevAcceptedCount)) {
-                        playNotificationSoundAndVibe();
-                    }
-
-                    localStorage.setItem('tatanggaq_active_order', JSON.stringify(cloudOrder));
-                } else {
-                    const localOrder = JSON.parse(localStorage.getItem('tatanggaq_active_order'));
-                    if (localOrder && localOrder.status !== 'WAITING') {
-                        playNotificationSoundAndVibe();
-                    }
-                    localStorage.removeItem('tatanggaq_active_order');
-                }
-                if (typeof updatePassengerAppUI === 'function') {
-                    updatePassengerAppUI();
-                }
-            }).catch(() => {});
-        }, 500);
-    }
-
-    // Trigger Sinkronisasi Instan Anti-Throttling Split-Screen
-    ['pointerdown', 'touchstart', 'visibilitychange', 'focus'].forEach(eventType => {
-        window.addEventListener(eventType, () => {
-            if (document.visibilityState === 'visible' || eventType === 'pointerdown' || eventType === 'touchstart') {
-                db.disableNetwork().then(() => {
-                    return db.enableNetwork();
-                }).then(() => {
-                    return db.collection("iqbike_system").doc("active_order").get({ source: "server" });
-                }).then((doc) => {
-                    if (doc.exists) {
-                        const cloudOrder = doc.data();
-                        localStorage.setItem('tatanggaq_active_order', JSON.stringify(cloudOrder));
-                        if (typeof updatePassengerAppUI === 'function') updatePassengerAppUI();
-                    }
-                }).catch(() => {});
-            }
-        }, { passive: true });
-    });
 
     window.onload = function() {
         initMap();
         updatePassengerAppUI();
         renderPassengerHistory();
-        startAutoPollingSync();
+        checkPwaDisplayMode();
     };
 </script>
 </body>
