@@ -1953,12 +1953,45 @@
         }
     }
 
-    window.onload = function() {
+  window.onload = function() {
         initMap();
         updatePassengerAppUI();
         renderPassengerHistory();
         checkPwaDisplayMode();
     };
+
+    // --- TAMBAHAN AUTO-SYNC ANTI-MACET SPLIT SCREEN (TATANGGAQ) ---
+    setInterval(() => {
+        if (navigator.onLine && typeof db !== 'undefined') {
+            db.collection("iqbike_system").doc("active_order").get({ source: "server" })
+                .then((doc) => {
+                    const localOrderStr = localStorage.getItem('tatanggaq_active_order');
+                    const localOrder = localOrderStr ? JSON.parse(localOrderStr) : null;
+
+                    if (doc.exists) {
+                        const cloudOrder = doc.data();
+                        if (!localOrder || localOrder.status !== cloudOrder.status || localOrder.fare !== cloudOrder.fare || localOrder.assignedDriverWa !== cloudOrder.assignedDriverWa) {
+                            localStorage.setItem('tatanggaq_active_order', JSON.stringify(cloudOrder));
+                            if (typeof updatePassengerAppUI === 'function') updatePassengerAppUI();
+                        }
+                    } else {
+                        if (localOrder) {
+                            localStorage.removeItem('tatanggaq_active_order');
+                            if (typeof updatePassengerAppUI === 'function') updatePassengerAppUI();
+                        }
+                    }
+                })
+                .catch(() => {});
+        }
+    }, 1500);
+
+    ['touchstart', 'pointerdown', 'visibilitychange', 'focus'].forEach(eventType => {
+        window.addEventListener(eventType, () => {
+            if (typeof db !== 'undefined') {
+                db.disableNetwork().then(() => db.enableNetwork()).catch(() => {});
+            }
+        }, { passive: true });
+    });
 </script>
 </body>
 </html>
